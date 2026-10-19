@@ -3,7 +3,7 @@ create table firm   (id uuid primary key default gen_random_uuid(), name text no
 create table app_user (id uuid primary key default gen_random_uuid(), firm_id uuid references firm, email text unique not null, role text not null check (role in ('admin','accountant','reviewer')));
 create table client (id uuid primary key default gen_random_uuid(), firm_id uuid references firm, name text not null, base_currency char(3) not null, auto_approve_threshold numeric(3,2) default 0.95);
 
-create table ledger_connection (id uuid primary key default gen_random_uuid(), client_id uuid references client, provider text not null default 'xero', external_tenant_id text, status text default 'active');
+create table ledger_connection (id uuid primary key default gen_random_uuid(), client_id uuid references client, provider text not null default 'bukku', external_tenant_id text, subdomain text, access_token_enc bytea, status text default 'active');
 create table account  (id uuid primary key default gen_random_uuid(), client_id uuid references client, code text, name text, type text, external_id text);
 create table tax_rate (id uuid primary key default gen_random_uuid(), client_id uuid references client, name text, rate numeric(6,3), external_id text);
 create table contact  (id uuid primary key default gen_random_uuid(), client_id uuid references client, name text, external_id text);

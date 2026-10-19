@@ -16,7 +16,7 @@ Ingest -> Extract -> Code/Classify -> Review -> Post -> Reconcile
 | # | Module | Responsibility | Key entities |
 |---|--------|----------------|--------------|
 | 1 | **Firm & Client Management** | Firm (tenant), staff users/roles, client companies, per-client settings (base currency, tax regime, coding rules). | firm, user, client |
-| 2 | **Ledger Connector** | Two-way sync with the accounting system (Xero first; pluggable adapter). Pull chart of accounts, tax rates, currencies, contacts. Push bills, expenses, bank statement lines. | ledger_connection, account, tax_rate, contact |
+| 2 | **Ledger Connector** | Two-way sync with the accounting system (Bukku first, see [bukku-connector.md](bukku-connector.md); Xero later; pluggable adapter). Pull chart of accounts, tax rates, currencies, contacts. Push bills, expenses, bank statement lines. | ledger_connection, account, tax_rate, contact |
 | 3 | **Document Ingestion** | Upload / email-in / API intake of invoices, receipts, bank statements (PDF, image, CSV). Dedupe by hash, store originals. | document, document_source |
 | 4 | **Extraction (OCR/AI)** | Multilingual (200+ languages) field extraction: supplier, date, number, currency, line items, tax, totals; confidence scores. Bank statement parsing to lines. | extraction, extracted_line |
 | 5 | **Coding & Classification** | Map extracted data to contact, account, tax rate, tracking category. Rules first, ML suggestion second, with confidence. | coding_rule, suggestion |
@@ -44,6 +44,6 @@ Auto-approve only when extraction and coding confidence both exceed a per-client
 
 ## Open questions
 
-- Ledgers beyond Xero (QuickBooks, MYOB)? Drives the adapter interface.
+- Ledgers beyond Bukku (Xero, QuickBooks, MYOB)? Drives the adapter interface.
 - Auto-post vs. always-human-approve default?
 - Where does the extraction model run (hosted API vs. self-hosted)?
