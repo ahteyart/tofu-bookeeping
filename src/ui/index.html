@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tofu Bookkeeping</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1d1d1b;--mut:#6b6b66;--card:#fff;--line:#e3e3dc;--acc:#2f6f4f;--bad:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#161614;--fg:#ececE6;--mut:#9a9a92;--card:#1f1f1c;--line:#34342f;--acc:#6fbf91;--bad:#f2928b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:920px;margin:0 auto;padding:16px}header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+h1{font-size:20px;margin:8px 0;flex:1}h2{font-size:16px;margin:24px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin:8px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}.stats div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px}
+.stats b{display:block;font-size:20px}.mut{color:var(--mut);font-size:13px}.bad{color:var(--bad)}
+select,input,textarea,button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+textarea{width:100%;min-height:120px;font-family:ui-monospace,monospace;font-size:13px}
+button{cursor:pointer}button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
+</style></head><body><main>
+<header><h1>Tofu Bookkeeping</h1><select id="client" aria-label="Client"></select><input id="token" type="password" placeholder="API token (if set)" aria-label="API token"></header>
+<div class="stats" id="stats"></div>
+<h2>Submit a document</h2>
+<div class="card">
+  <div class="row"><select id="kind"><option>invoice</option><option>receipt</option><option>bank_statement</option></select><input id="fname" value="invoice.txt" aria-label="Filename"></div>
+  <textarea id="content" aria-label="Document text">Supplier: Tenaga Nasional Berhad
+Invoice No: INV-001
+Date: 2026-10-01
+Currency: MYR
+Electricity | 1 | 100
+Tax: 0
+Total: 100</textarea>
+  <div class="row"><button class="pri" id="submit">Process</button><span class="mut" id="submitMsg"></span></div>
+</div>
+<h2>Review queue</h2><div id="queue"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const el=(t,p={},...k)=>{const e=document.createElement(t);Object.assign(e,p);e.append(...k);return e};
+async function api(method,path,body){
+  const h={'Content-Type':'application/json'};const t=$('token').value;if(t)h.Authorization='Bearer '+t;
+  const r=await fetch(path,{method,headers:h,body:body?JSON.stringify(body):undefined});
+  const j=await r.json();if(!r.ok)throw new Error(j.error||r.statusText);return j}
+const cid=()=>$('client').value;
+async function load(){
+  try{
+    const [s,q]=await Promise.all([api('GET',`/api/clients/${cid()}/summary`),api('GET',`/api/clients/${cid()}/review`)]);
+    const st=$('stats');st.replaceChildren(...[['Documents',s.documents],['Posted',s.posted],['Needs review',s.needsReview],['Failed',s.failed],['Touchless',Math.round(s.automationRate*100)+'%'],['Bank matched',`${s.bankMatched}/${s.bankLines}`]].map(([a,b])=>el('div',{},el('b',{textContent:b}),el('span',{className:'mut',textContent:a}))));
+    $('queue').replaceChildren(...(q.length?q.map(card):[el('p',{className:'mut',textContent:'Nothing to review.'})]));
+  }catch(e){$('queue').replaceChildren(el('p',{className:'bad',textContent:e.message}))}}
+function opts(list,label,sel,none){const s=el('select');if(none)s.append(el('option',{value:'',textContent:none}));
+  list.forEach(o=>s.append(el('option',{value:o.id,textContent:label(o),selected:o.id===sel})));return s}
+function card(it){
+  const ex=it.extraction,co=it.coding;
+  const contact=opts(it.contacts,c=>c.name,co.contactId,'— choose supplier —');
+  const rows=ex.lines.map((l,i)=>{
+    const acc=opts(it.accounts,a=>`${a.code} ${a.name}`,co.lines[i].accountId,'— account —');
+    const tax=opts(it.taxRates,t=>t.name,co.lines[i].taxRateId,'— tax —');
+    return {acc,tax,tr:el('tr',{},el('td',{textContent:l.description}),el('td',{textContent:l.amount.toFixed(2)}),el('td',{},acc),el('td',{},tax))}});
+  const msg=el('span',{className:'mut'});
+  const go=el('button',{className:'pri',textContent:'Approve & post',onclick:async()=>{try{
+    const r=await api('POST',`/api/review/${it.id}/approve`,{contactId:contact.value||undefined,lines:rows.map(r=>({accountId:r.acc.value||undefined,taxRateId:r.tax.value||undefined}))});
+    msg.textContent='Posting: '+r.status;load()}catch(e){msg.textContent=e.message;msg.className='bad'}}});
+  const no=el('button',{textContent:'Reject',onclick:async()=>{await api('POST',`/api/review/${it.id}/reject`,{reason:'rejected in UI'});load()}});
+  return el('div',{className:'card'},
+    el('div',{},el('b',{textContent:`${ex.supplier||'(unknown supplier)'} · ${ex.docNumber||'?'}`}),el('span',{className:'mut',textContent:` ${ex.docDate} · ${ex.currency} ${ex.total.toFixed(2)} · ${it.document.filename}`})),
+    el('div',{className:'bad',textContent:it.reasons.join(' · ')}),
+    el('div',{className:'row'},el('span',{className:'mut',textContent:'Supplier'}),contact),
+    el('table',{},el('tr',{},...['Item','Amount','Account','Tax'].map(h=>el('th',{textContent:h}))),...rows.map(r=>r.tr)),
+    el('div',{className:'row'},go,no,msg))}
+$('submit').onclick=async()=>{try{
+  const d=await api('POST',`/api/clients/${cid()}/documents`,{kind:$('kind').value,filename:$('fname').value,content:$('content').value});
+  $('submitMsg').textContent='Status: '+d.status;load()}catch(e){$('submitMsg').textContent=e.message}};
+$('client').onchange=load;$('token').onchange=()=>init();
+async function init(){try{const cs=await api('GET','/api/clients');$('client').replaceChildren(...cs.map(c=>el('option',{value:c.id,textContent:c.name})));load()}catch(e){$('queue').replaceChildren(el('p',{className:'bad',textContent:e.message}))}}
+init();
+</script></body></html>

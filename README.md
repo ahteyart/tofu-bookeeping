@@ -12,10 +12,14 @@ Ingest -> Extract -> Code -> Review -> Post -> Reconcile
 
 ```bash
 npm install
-npm test          # 11 tests
+npm test          # 14 tests
 npm run typecheck
 npm run demo      # shows a supplier becoming touchless after 2 confirmations
+npm run serve     # API + review UI at http://localhost:3000 (fake ledger unless Bukku env vars set)
 ```
+
+Server env: `PORT`, `DATA_FILE` (JSON snapshot, default `data.json`), `API_TOKEN` (enables Bearer auth; **set it
+before exposing the server**), `BUKKU_BASE_URL` + `BUKKU_SUBDOMAIN` + `BUKKU_TOKEN` (use the Bukku adapter).
 
 Requires Node >= 22.18 (runs TypeScript directly; no build step).
 
@@ -44,6 +48,7 @@ or `needs_review`; a human `approve()` then `postApproved()` finishes it.
 - **Bukku**: `src/modules/ledger/bukku.ts` has the structure, but endpoint paths, auth header, payloads and
   pagination are placeholders (`BUKKU_ENDPOINTS`, marked TBD) because developers.bukku.my was blocked in the build
   sandbox. Check them against the docs before connecting a real company. Tested only against a mocked transport.
-- Storage is in-memory (`core/store.ts`); `db/schema.sql` is the intended Postgres model.
-- No HTTP API, UI, file storage, auth, or real OCR yet.
+- Storage is in-memory with a JSON snapshot (`core/persist.ts`), single process only; `db/schema.sql` is the intended Postgres model.
+- API (`src/api/server.ts`) and review UI (`src/ui/index.html`) exist; auth is one shared bearer token, no per-user login.
+- Documents are submitted as text. No file upload/storage or real OCR yet.
 - Docs: [docs/modules.md](docs/modules.md), [docs/bukku-connector.md](docs/bukku-connector.md).
