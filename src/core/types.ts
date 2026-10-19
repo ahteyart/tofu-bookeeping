@@ -33,6 +33,8 @@ export interface ExtractedLine { description: string; qty: number; unitPrice: nu
 export interface Extraction {
   documentId: string; supplier: string; docNumber: string; docDate: string;
   currency: string; total: number; taxTotal: number; lines: ExtractedLine[]; confidence: number;
+  /** line prices already include tax (typical for retail receipts) */
+  pricesIncludeTax?: boolean;
 }
 export interface BankLine {
   id: string; clientId: string; documentId: string; date: string;

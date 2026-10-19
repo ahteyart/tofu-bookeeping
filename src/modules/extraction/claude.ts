@@ -10,10 +10,11 @@ const TOOL = {
     type: 'object',
     properties: {
       supplier: { type: 'string', description: 'Legal/trading name of the issuing supplier' },
-      docNumber: { type: 'string', description: 'Invoice or receipt number' },
+      docNumber: { type: 'string', description: 'Invoice, receipt or transaction number exactly as printed; empty string if none is printed' },
       docDate: { type: 'string', description: 'Issue date, YYYY-MM-DD' },
       currency: { type: 'string', description: 'ISO 4217 code, e.g. MYR' },
-      taxTotal: { type: 'number' },
+      taxTotal: { type: 'number', description: 'Total tax shown (SST/GST/VAT); 0 if none is shown' },
+      pricesIncludeTax: { type: 'boolean', description: 'true when the printed line prices already include tax, as on most retail receipts' },
       total: { type: 'number', description: 'Grand total including tax' },
       lines: {
         type: 'array',
@@ -24,6 +25,14 @@ const TOOL = {
     required: ['supplier', 'docNumber', 'docDate', 'currency', 'total', 'lines', 'legibility'],
   },
 } as const;
+
+const BASE_PROMPT = 'Extract this accounting document. Copy values exactly as printed; never guess a missing field - use an empty string or 0 and lower legibility.';
+const RECEIPT_PROMPT = `${BASE_PROMPT}
+This is a retail/till receipt. The supplier is the merchant that issued it (shop or company name, not the payment terminal or card network).
+Many receipts print no invoice number: use the receipt, bill or transaction number if one is printed, otherwise an empty string.
+Prices usually already include tax: set pricesIncludeTax accordingly and report the tax shown separately in taxTotal.
+total is the amount actually charged, not the amount tendered or the change. If items are not itemised, return one line describing the purchase with the total as its price.`;
+const promptFor = (kind: string) => (kind === 'receipt' ? RECEIPT_PROMPT : BASE_PROMPT);
 
 export interface ClaudeConfig { apiKey: string; model?: string; baseUrl?: string; fetchImpl?: typeof fetch; }
 
@@ -46,7 +55,7 @@ export class ClaudeExtractor implements Extractor {
       body: JSON.stringify({
         model: this.cfg.model ?? 'claude-sonnet-5-5', max_tokens: 4096,
         tools: [TOOL], tool_choice: { type: 'tool', name: TOOL.name },
-        messages: [{ role: 'user', content: [block, { type: 'text', text: 'Extract this accounting document. Copy values exactly as printed; never guess a missing field - use an empty string or 0 and lower legibility.' }] }],
+        messages: [{ role: 'user', content: [block, { type: 'text', text: promptFor(doc.kind) }] }],
       }),
     });
     if (!res.ok) throw new Error(`claude extraction failed: ${res.status}`);
@@ -60,12 +69,18 @@ export class ClaudeExtractor implements Extractor {
     }));
     const taxTotal = Number(input.taxTotal ?? 0), total = Number(input.total);
     let confidence = Math.max(0, Math.min(1, Number(input.legibility ?? 0)));
-    const missing = [input.supplier, input.docNumber, input.docDate].filter((v) => !v).length;
+    const isReceipt = doc.kind === 'receipt';
+    const pricesIncludeTax = !!input.pricesIncludeTax;
+    // A receipt with only a total still has one valid line.
+    if (isReceipt && !lines.length && total > 0) lines.push({ description: `Purchase at ${input.supplier || 'merchant'}`, qty: 1, unitPrice: total, amount: total });
+    // Till receipts often print no number: derive a stable reference so the ledger lookup stays idempotent.
+    const docNumber = String(input.docNumber ?? '') || (isReceipt ? `R-${doc.sha256.slice(0, 10)}` : '');
+    const missing = [input.supplier, input.docNumber || (isReceipt ? 'derived' : ''), input.docDate].filter((v) => !v).length;
     if (missing || !lines.length) confidence = Math.min(confidence, 0.5);
-    const sum = lines.reduce((s: number, l: { amount: number }) => s + l.amount, 0) + taxTotal;
+    const sum = lines.reduce((s: number, l: { amount: number }) => s + l.amount, 0) + (pricesIncludeTax ? 0 : taxTotal);
     if (Math.abs(sum - total) > 0.01) confidence = Math.min(confidence, 0.5);   // arithmetic must reconcile
     return {
-      documentId: doc.id, supplier: String(input.supplier ?? ''), docNumber: String(input.docNumber ?? ''), docDate: String(input.docDate ?? ''),
+      documentId: doc.id, supplier: String(input.supplier ?? ''), docNumber, docDate: String(input.docDate ?? ''), pricesIncludeTax,
       currency: String(input.currency || 'MYR').toUpperCase(), total, taxTotal, lines, confidence,
     };
   }

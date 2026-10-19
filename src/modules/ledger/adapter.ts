@@ -2,6 +2,8 @@ import type { Account, Contact, TaxRate } from '../../core/types.ts';
 
 export interface BillDraft {
   contactId?: string; contactName: string; number: string; date: string; currency: string;
+  /** unit prices already include tax; the ledger must not add tax on top */
+  taxInclusive?: boolean;
   lines: { description: string; qty: number; unitPrice: number; accountId: string; taxRateId?: string }[];
 }
 

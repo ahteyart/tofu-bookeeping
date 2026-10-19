@@ -12,7 +12,7 @@ Ingest -> Extract -> Code -> Review -> Post -> Reconcile
 
 ```bash
 npm install
-npm test          # 18 tests
+npm test          # 21 tests
 npm run typecheck
 npm run demo      # shows a supplier becoming touchless after 2 confirmations
 npm run serve     # API + review UI at http://localhost:3000 (fake ledger unless Bukku env vars set)

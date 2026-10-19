@@ -30,7 +30,7 @@ export async function postDocument(store: Store, documentId: string, ledger: Led
       let externalId = await ledger.findBill(ex.supplier, ex.docNumber, ex.docDate);
       if (!externalId) {
         ({ externalId } = await ledger.createPurchaseBill({
-          contactId: coding.contactId, contactName: ex.supplier, number: ex.docNumber, date: ex.docDate, currency: ex.currency,
+          contactId: coding.contactId, contactName: ex.supplier, number: ex.docNumber, date: ex.docDate, currency: ex.currency, taxInclusive: ex.pricesIncludeTax,
           lines: ex.lines.map((l, i) => ({ description: l.description, qty: l.qty, unitPrice: l.unitPrice, accountId: coding.lines[i].accountId!, taxRateId: coding.lines[i].taxRateId })),
         }));
       }

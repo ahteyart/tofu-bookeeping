@@ -159,3 +159,56 @@ test('persistence round-trips the store', async () => {
   assert.equal(back.clients.get(client.id)?.name, client.name);
   assert.equal(back.reviewItems.size, 1);
 });
+
+function receiptApi(input: Record<string, unknown>, seen: { prompt?: string } = {}) {
+  const fetchImpl = (async (_u: string, init: RequestInit) => {
+    seen.prompt = JSON.parse(String(init.body)).messages[0].content[1].text;
+    return new Response(JSON.stringify({ content: [{ type: 'tool_use', input }] }), { status: 200 });
+  }) as unknown as typeof fetch;
+  return new RoutingExtractor(new ClaudeExtractor({ apiKey: 'k', fetchImpl }));
+}
+const photo = (name: string) => ({ kind: 'receipt', filename: name, mediaType: 'image/jpeg', contentBase64: Buffer.from(name).toString('base64') });
+
+test('receipt: no printed number and tax-inclusive prices are handled without a false alarm', async () => {
+  const s = await start(); const h = await s.auth();
+  const seen: { prompt?: string } = {};
+  s.deps.extractor = receiptApi({ supplier: 'Popular Bookstore', docNumber: '', docDate: '2026-10-12', currency: 'MYR', total: 53.0, taxTotal: 3.0, pricesIncludeTax: true,
+    lines: [{ description: 'A4 paper', qty: 2, unitPrice: 20 }, { description: 'Pens', qty: 1, unitPrice: 13 }], legibility: 0.97 }, seen);
+  s.store.rules.set('r', { id: 'r', clientId: s.client.id, supplierMatch: 'popular bookstore', accountId: 'a-off', taxRateId: 't-sst', source: 'manual' });
+  const r = await s.call('POST', `/api/clients/${s.client.id}/documents`, photo('till.jpg'), h);
+  assert.equal(r.body.status, 'posted');                       // no review needed
+  const ex = s.store.extractions.get(r.body.id)!;
+  assert.match(ex.docNumber, /^R-[0-9a-f]{10}$/);
+  assert.equal(ex.pricesIncludeTax, true);
+  assert.match(seen.prompt ?? '', /retail\/till receipt/);
+  assert.equal([...s.ledger.bills.values()][0].taxInclusive, true);
+  s.server.close();
+});
+
+test('receipt: total only becomes one line; the same photo twice posts once; arithmetic errors still go to review', async () => {
+  const s = await start(); const h = await s.auth();
+  s.deps.extractor = receiptApi({ supplier: 'Popular Bookstore', docNumber: '', docDate: '2026-10-13', currency: 'MYR', total: 24.5, lines: [], legibility: 0.95 });
+  s.store.rules.set('r', { id: 'r', clientId: s.client.id, supplierMatch: 'popular bookstore', accountId: 'a-off', source: 'manual' });
+  const a = await s.call('POST', `/api/clients/${s.client.id}/documents`, photo('only-total.jpg'), h);
+  assert.equal(a.body.status, 'posted');
+  assert.deepEqual(s.store.extractions.get(a.body.id)!.lines.map((l) => l.amount), [24.5]);
+  const again = await s.call('POST', `/api/clients/${s.client.id}/documents`, photo('only-total.jpg'), h);
+  assert.equal(again.body.id, a.body.id);
+  assert.equal(s.ledger.bills.size, 1);
+
+  s.deps.extractor = receiptApi({ supplier: 'Popular Bookstore', docNumber: '', docDate: '2026-10-13', currency: 'MYR', total: 99, taxTotal: 0, pricesIncludeTax: false,
+    lines: [{ description: 'Pens', qty: 1, unitPrice: 10 }], legibility: 1 });
+  const bad = await s.call('POST', `/api/clients/${s.client.id}/documents`, photo('bad-math.jpg'), h);
+  assert.equal(bad.body.status, 'needs_review');
+  s.server.close();
+});
+
+test('invoice without a number is still flagged (receipt leniency does not leak)', async () => {
+  const s = await start(); const h = await s.auth();
+  s.deps.extractor = receiptApi({ supplier: 'Popular Bookstore', docNumber: '', docDate: '2026-10-13', currency: 'MYR', total: 10, taxTotal: 0,
+    lines: [{ description: 'Pens', qty: 1, unitPrice: 10 }], legibility: 1 });
+  s.store.rules.set('r', { id: 'r', clientId: s.client.id, supplierMatch: 'popular bookstore', accountId: 'a-off', source: 'manual' });
+  const r = await s.call('POST', `/api/clients/${s.client.id}/documents`, { ...photo('inv.jpg'), kind: 'invoice' }, h);
+  assert.equal(r.body.status, 'needs_review');
+  s.server.close();
+});

@@ -73,7 +73,7 @@ export class BukkuAdapter implements LedgerAdapter {
 
   async createPurchaseBill(d: BillDraft): Promise<{ externalId: string }> {
     const payload = {                                           // TBD: map to Bukku's bill schema
-      contact_id: d.contactId, number: d.number, date: d.date, currency_code: d.currency,
+      contact_id: d.contactId, tax_inclusive: d.taxInclusive ?? false /* TBD: Bukku's real field */, number: d.number, date: d.date, currency_code: d.currency,
       line_items: d.lines.map((l) => ({
         description: l.description, quantity: l.qty, unit_price: l.unitPrice,
         account_id: l.accountId, tax_code_id: l.taxRateId,
