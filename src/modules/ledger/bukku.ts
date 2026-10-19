@@ -83,8 +83,8 @@ export class BukkuAdapter implements LedgerAdapter {
     return { externalId: String(r.data?.id ?? r.id) };
   }
 
-  async attachFile(externalId: string, filename: string, content: string): Promise<void> {
+  async attachFile(externalId: string, filename: string, content: Buffer): Promise<void> {
     // TBD: Bukku likely needs multipart upload then link to the bill.
-    await this.call('POST', BUKKU_ENDPOINTS.files, { filename, content_base64: Buffer.from(content).toString('base64'), attach_to: externalId });
+    await this.call('POST', BUKKU_ENDPOINTS.files, { filename, content_base64: content.toString('base64'), attach_to: externalId });
   }
 }

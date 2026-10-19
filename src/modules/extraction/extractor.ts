@@ -2,7 +2,8 @@ import type { BankLine, Document, Extraction } from '../../core/types.ts';
 
 /** Module 4 - extraction contract. Swap in an OCR/LLM-backed implementation in production. */
 export interface Extractor {
-  extractDocument(doc: Document): Promise<Extraction>;
+  /** `file` holds the raw bytes for uploaded PDFs/images. */
+  extractDocument(doc: Document, file?: Buffer): Promise<Extraction>;
 }
 
 const field = (text: string, label: string) =>
@@ -16,7 +17,7 @@ const num = (s?: string) => (s ? Number(s.replace(/[^0-9.\-]/g, '')) : NaN);
  * Confidence reflects how many required fields were found and whether lines sum to the total.
  */
 export class HeuristicTextExtractor implements Extractor {
-  async extractDocument(doc: Document): Promise<Extraction> {
+  async extractDocument(doc: Document, _file?: Buffer): Promise<Extraction> {
     const t = doc.content;
     const supplier = field(t, 'supplier') ?? '';
     const docNumber = field(t, '(?:invoice|receipt|doc)(?: no\\.?| number)?') ?? '';

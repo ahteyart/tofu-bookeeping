@@ -1,6 +1,7 @@
 import type { Posting } from '../../core/types.ts';
 import { must, newId, now, type Store } from '../../core/store.ts';
 import { record } from '../audit/audit.ts';
+import type { FileStore } from '../../core/files.ts';
 import type { LedgerAdapter } from '../ledger/adapter.ts';
 
 export const MAX_ATTEMPTS = 3;
@@ -10,7 +11,7 @@ export const MAX_ATTEMPTS = 3;
  * Idempotent: a stable key per document, plus a ledger-side lookup before create,
  * so retries never double-post.
  */
-export async function postDocument(store: Store, documentId: string, ledger: LedgerAdapter): Promise<Posting> {
+export async function postDocument(store: Store, documentId: string, ledger: LedgerAdapter, files?: FileStore): Promise<Posting> {
   const doc = must(store.documents.get(documentId), 'document');
   const ex = must(store.extractions.get(documentId), 'extraction');
   const coding = must(store.codings.get(documentId), 'coding');
@@ -33,7 +34,7 @@ export async function postDocument(store: Store, documentId: string, ledger: Led
           lines: ex.lines.map((l, i) => ({ description: l.description, qty: l.qty, unitPrice: l.unitPrice, accountId: coding.lines[i].accountId!, taxRateId: coding.lines[i].taxRateId })),
         }));
       }
-      await ledger.attachFile(externalId, doc.filename, doc.content);
+      await ledger.attachFile(externalId, doc.filename, doc.filePath && files ? files.get(doc.filePath) : Buffer.from(doc.content));
       Object.assign(p, { status: 'posted', externalId, postedAt: now(), error: undefined });
       doc.status = 'posted';
       record(store, 'system', 'posting.posted', 'document', documentId, { externalId, attempts: p.attempts });

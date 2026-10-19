@@ -3,6 +3,8 @@ import { HeuristicTextExtractor } from '../src/modules/extraction/extractor.ts';
 import { FakeLedger } from '../src/modules/ledger/fake.ts';
 import { syncLedger } from '../src/modules/ledger/sync.ts';
 import { addClient, addUser, createFirm } from '../src/modules/firm/firm.ts';
+import { setPassword } from '../src/modules/firm/auth.ts';
+import { MemoryFileStore } from '../src/core/files.ts';
 import type { Deps } from '../src/workflow/pipeline.ts';
 
 export async function setup() {
@@ -14,9 +16,10 @@ export async function setup() {
   );
   const firm = createFirm(store, 'Acme Accounting');
   const user = addUser(store, firm.id, 'a@acme.test', 'accountant');
+  setPassword(store, user.id, 'correct horse battery');
   const client = addClient(store, firm.id, 'Kedai Runcit Sdn Bhd');
   await syncLedger(store, client.id, ledger);
-  const deps: Deps = { store, extractor: new HeuristicTextExtractor(), ledger };
+  const deps: Deps = { store, extractor: new HeuristicTextExtractor(), ledger, files: new MemoryFileStore() };
   return { store, ledger, firm, user, client, deps };
 }
 

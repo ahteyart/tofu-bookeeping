@@ -14,5 +14,5 @@ export interface LedgerAdapter {
   /** Used for idempotency: returns the external id if the bill already exists. */
   findBill(contactName: string, number: string, date: string): Promise<string | undefined>;
   createPurchaseBill(draft: BillDraft): Promise<{ externalId: string }>;
-  attachFile(externalId: string, filename: string, content: string): Promise<void>;
+  attachFile(externalId: string, filename: string, content: Buffer): Promise<void>;
 }

@@ -4,7 +4,12 @@ export type DocStatus =
   | 'approved' | 'posted' | 'failed' | 'rejected';
 
 export interface Firm { id: string; name: string; plan: 'starter' | 'pro'; }
-export interface User { id: string; firmId: string; email: string; role: 'admin' | 'accountant' | 'reviewer'; }
+export interface User {
+  id: string; firmId: string; email: string; role: 'admin' | 'accountant' | 'reviewer';
+  /** scrypt hash as `salt:hash` (hex); absent = cannot log in */
+  passwordHash?: string;
+}
+export interface Session { token: string; userId: string; expiresAt: number; }
 export interface Client {
   id: string; firmId: string; name: string; baseCurrency: string;
   /** docs at or above this combined confidence skip human review */
@@ -21,6 +26,8 @@ export interface Document {
   id: string; clientId: string; kind: DocKind; filename: string;
   sha256: string; /** OCR'd / plain text content */ content: string;
   status: DocStatus; autoApproved: boolean; createdAt: string; error?: string;
+  /** set for uploaded PDFs/images; `content` is then empty and the bytes live in the file store */
+  mediaType?: string; filePath?: string;
 }
 export interface ExtractedLine { description: string; qty: number; unitPrice: number; amount: number; }
 export interface Extraction {

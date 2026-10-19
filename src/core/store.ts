@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   AuditEntry, BankLine, Client, Coding, CodingRule, Document, Extraction, Feedback,
-  Firm, LedgerCache, Posting, ReviewItem, UsageRecord, User,
+  Firm, LedgerCache, Posting, ReviewItem, Session, UsageRecord, User,
 } from './types.ts';
 
 export const newId = (): string => randomUUID();
@@ -22,6 +22,8 @@ export class Store {
   postings = new Map<string, Posting>();
   bankLines = new Map<string, BankLine>();
   audit: AuditEntry[] = [];
+  sessions = new Map<string, Session>();
+  loginFails = new Map<string, { n: number; until: number }>();
   usage = new Map<string, UsageRecord>();
 }
 
